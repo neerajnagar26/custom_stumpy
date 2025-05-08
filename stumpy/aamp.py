@@ -28,11 +28,7 @@ def _compute_diagonal(
     diags_stop_idx,
     thread_idx,
     P,
-    PL,
-    PR,
     I,
-    IL,
-    IR,
     ignore_trivial,
     eu_thres,
 ):
@@ -174,16 +170,16 @@ def _compute_diagonal(
                             I[thread_idx, uint64_j], idx, uint64_i, shift="right"
                         )
 
-                    if uint64_i < uint64_j:
-                        # left matrix profile and left matrix profile index
-                        if p_norm < PL[thread_idx, uint64_j]:
-                            PL[thread_idx, uint64_j] = p_norm
-                            IL[thread_idx, uint64_j] = uint64_i
+                    # if uint64_i < uint64_j:
+                    #     # left matrix profile and left matrix profile index
+                    #     if p_norm < PL[thread_idx, uint64_j]:
+                    #         PL[thread_idx, uint64_j] = p_norm
+                    #         IL[thread_idx, uint64_j] = uint64_i
 
-                        # right matrix profile and right matrix profile index
-                        if p_norm < PR[thread_idx, uint64_i]:
-                            PR[thread_idx, uint64_i] = p_norm
-                            IR[thread_idx, uint64_i] = uint64_j
+                    #     # right matrix profile and right matrix profile index
+                    #     if p_norm < PR[thread_idx, uint64_i]:
+                    #         PR[thread_idx, uint64_i] = p_norm
+                    #         IR[thread_idx, uint64_i] = uint64_j
 
     return
 
@@ -287,11 +283,11 @@ def _aamp(
     P = np.full((n_threads, l, k), np.inf, dtype=np.float64)
     I = np.full((n_threads, l, k), -1, dtype=np.int64)
 
-    PL = np.full((n_threads, l), np.inf, dtype=np.float64)
-    IL = np.full((n_threads, l), -1, dtype=np.int64)
+    # PL = np.full((n_threads, l), np.inf, dtype=np.float64)
+    # IL = np.full((n_threads, l), -1, dtype=np.int64)
 
-    PR = np.full((n_threads, l), np.inf, dtype=np.float64)
-    IR = np.full((n_threads, l), -1, dtype=np.int64)
+    # PR = np.full((n_threads, l), np.inf, dtype=np.float64)
+    # IR = np.full((n_threads, l), -1, dtype=np.int64)
 
     ndist_counts = core._count_diagonal_ndist(diags, m, n_A, n_B)
     diags_ranges = core._get_array_ranges(ndist_counts, n_threads, False)
@@ -310,11 +306,7 @@ def _aamp(
             diags_ranges[thread_idx, 1],
             thread_idx,
             P,
-            PL,
-            PR,
             I,
-            IL,
-            IR,
             ignore_trivial,
             eu_thres,
         )
@@ -325,23 +317,25 @@ def _aamp(
         core._merge_topk_PI(P[0], P[thread_idx], I[0], I[thread_idx])
 
         # update left matrix profile and matrix profile indices
-        mask = PL[0] > PL[thread_idx]
-        PL[0][mask] = PL[thread_idx][mask]
-        IL[0][mask] = IL[thread_idx][mask]
+        # mask = PL[0] > PL[thread_idx]
+        # PL[0][mask] = PL[thread_idx][mask]
+        # IL[0][mask] = IL[thread_idx][mask]
 
-        # update right matrix profile and matrix profile indices
-        mask = PR[0] > PR[thread_idx]
-        PR[0][mask] = PR[thread_idx][mask]
-        IR[0][mask] = IR[thread_idx][mask]
+        # # update right matrix profile and matrix profile indices
+        # mask = PR[0] > PR[thread_idx]
+        # PR[0][mask] = PR[thread_idx][mask]
+        # IR[0][mask] = IR[thread_idx][mask]
 
-    return (
-        np.power(P[0], 1.0 / p),
-        np.power(PL[0], 1.0 / p),
-        np.power(PR[0], 1.0 / p),
-        I[0],
-        IL[0],
-        IR[0],
-    )
+    # return (
+    #     np.power(P[0], 1.0 / p),
+    #     np.power(PL[0], 1.0 / p),
+    #     np.power(PR[0], 1.0 / p),
+    #     I[0],
+    #     IL[0],
+    #     IR[0],
+    # )
+    return np.power(P[0], 1.0 / p), None, None, I[0], None, None
+
 
 
 def aamp(T_A, m, T_B=None, ignore_trivial=True, p=2.0, k=1, eu_thres=None):
@@ -449,10 +443,13 @@ def aamp(T_A, m, T_B=None, ignore_trivial=True, p=2.0, k=1, eu_thres=None):
         eu_thres,
     )
 
-    out = np.empty((l, 2 * k + 2), dtype=object)
+    out = np.empty((l, 2 * k), dtype=object)
     out[:, :k] = P
-    out[:, k:] = np.column_stack((I, IL, IR))
+    out[:, k:] = I
 
     core._check_P(out[:, 0])
 
-    return mparray(out, m, k, config.STUMPY_EXCL_ZONE_DENOM)
+    out_mpa = mparray(out, m, k, config.STUMPY_EXCL_ZONE_DENOM)
+    # Optional: disable left/right accessors
+    return out_mpa
+
