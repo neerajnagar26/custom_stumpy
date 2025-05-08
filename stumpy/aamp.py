@@ -9,6 +9,7 @@ from numba import njit, prange
 from . import config, core
 from .mparray import mparray
 
+print(">>> [DEBUG] Calling aamp.py")
 
 @njit(
     # "(f8[:], f8[:], i8, b1[:], b1[:], f8, i8[:], i8, i8, i8, f8[:, :, :],"
@@ -33,6 +34,7 @@ def _compute_diagonal(
     IL,
     IR,
     ignore_trivial,
+    eu_thres,
 ):
     """
     Compute (Numba JIT-compiled) and update the (top-k) matrix profile P,
@@ -150,6 +152,9 @@ def _compute_diagonal(
                 # when the newly-calculated `p_norm` value becomes smaller than the
                 # last (i.e. greatest) element in this array. Note that the goal
                 # is to have top-k smallest distances for each subsequence.
+                if eu_thres is not None and p_norm >= eu_thres:
+                    continue
+
                 if p_norm < P[thread_idx, uint64_i, -1]:
                     idx = np.searchsorted(P[thread_idx, uint64_i], p_norm)
                     core._shift_insert_at_index(
@@ -198,6 +203,7 @@ def _aamp(
     diags,
     ignore_trivial,
     k,
+    eu_thres,
 ):
     """
     A Numba JIT-compiled version of AAMP for parallel computation of the matrix
@@ -267,6 +273,12 @@ def _aamp(
 
     See Algorithm 1
     """
+
+    if eu_thres is not None:
+        eu_thres = eu_thres ** p
+    else:
+        eu_thres = None
+
     n_A = T_A.shape[0]
     n_B = T_B.shape[0]
     l = n_A - m + 1
@@ -304,6 +316,7 @@ def _aamp(
             IL,
             IR,
             ignore_trivial,
+            eu_thres,
         )
 
     # Reduction of results from all threads
@@ -331,7 +344,7 @@ def _aamp(
     )
 
 
-def aamp(T_A, m, T_B=None, ignore_trivial=True, p=2.0, k=1):
+def aamp(T_A, m, T_B=None, ignore_trivial=True, p=2.0, k=1, eu_thres=None):
     """
     Compute the non-normalized (i.e., without z-normalization) matrix profile
 
@@ -394,6 +407,9 @@ def aamp(T_A, m, T_B=None, ignore_trivial=True, p=2.0, k=1):
 
     Note that we have extended this algorithm for AB-joins as well.
     """
+    # print(">>> calling aamp.py \ aamp())")
+    print(f"     eu_thres: {eu_thres}, p: {p}, k: {k}, ignore_trivial: {ignore_trivial}, m: {m}")
+
     if T_B is None:
         T_B = T_A.copy()
         ignore_trivial = True
@@ -430,6 +446,7 @@ def aamp(T_A, m, T_B=None, ignore_trivial=True, p=2.0, k=1):
         diags,
         ignore_trivial,
         k,
+        eu_thres,
     )
 
     out = np.empty((l, 2 * k + 2), dtype=object)

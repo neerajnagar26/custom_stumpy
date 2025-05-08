@@ -22,3 +22,5 @@ docs/_build
 .directory
 test.py
 *.nbconvert.ipynb
+.custom1/
+

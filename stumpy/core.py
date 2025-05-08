@@ -17,6 +17,8 @@ from scipy.spatial.distance import cdist
 
 from . import config
 
+print(">>> calling core.py")
+
 try:
     from numba.cuda.cudadrv.driver import _raise_driver_not_found
 except ImportError:
