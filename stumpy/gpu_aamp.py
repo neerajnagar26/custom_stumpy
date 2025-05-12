@@ -15,7 +15,7 @@ from .mparray import mparray
 @cuda.jit(
     "(i8, f8[:], f8[:], i8, f8, f8[:], f8[:], f8[:], b1[:], b1[:],"
     "i8, b1, i8, f8[:, :], f8[:], f8[:], i8[:, :], i8[:], i8[:], b1,"
-    "i8[:], i8, i8)"
+    "i8[:], i8, i8, f8)"
 )
 def _compute_and_update_PI_kernel(
     idx,
@@ -41,6 +41,7 @@ def _compute_and_update_PI_kernel(
     bfs,
     nlevel,
     k,
+    eu_thresh,
 ):
     """
     A Numba CUDA kernel to update the non-normalized (i.e., without z-normalization)
@@ -188,7 +189,8 @@ def _compute_and_update_PI_kernel(
                 profile_R[i] = p_norm
                 indices_R[i] = j
 
-        if p_norm < profile[i, -1]:
+        # if p_norm < profile[i, -1]:
+        if (eu_thresh < 0 or p_norm <= eu_thresh) and p_norm < profile[i, -1]:
             idx = core._gpu_searchsorted_right(profile[i], p_norm, bfs, nlevel)
             for g in range(k - 1, idx, -1):
                 profile[i, g] = profile[i, g - 1]
@@ -214,6 +216,7 @@ def _gpu_aamp(
     range_start=1,
     device_id=0,
     k=1,
+    eu_thresh=-1.0,
 ):
     """
     A Numba CUDA version of AAMP for parallel computation of the non-normalized (i.e.,
@@ -383,6 +386,7 @@ def _gpu_aamp(
             device_bfs,
             nlevel,
             k,
+            eu_thresh,
         )
 
         for i in range(range_start, range_stop):
@@ -410,6 +414,7 @@ def _gpu_aamp(
                 device_bfs,
                 nlevel,
                 k,
+                eu_thresh,
             )
 
         profile = device_profile.copy_to_host()
@@ -440,7 +445,7 @@ def _gpu_aamp(
     )
 
 
-def gpu_aamp(T_A, m, T_B=None, ignore_trivial=True, device_id=0, p=2.0, k=1):
+def gpu_aamp(T_A, m, T_B=None, ignore_trivial=True, device_id=0, p=2.0, k=1, eu_thresh=None):
     """
     Compute the non-normalized (i.e., without z-normalization) matrix profile with
     one or more GPU devices
@@ -517,6 +522,11 @@ def gpu_aamp(T_A, m, T_B=None, ignore_trivial=True, device_id=0, p=2.0, k=1):
 
     See Table II, Figure 5, and Figure 6
     """
+    if eu_thresh is not None:
+        eu_thresh = eu_thresh ** p
+    else:
+        eu_thresh = -1.0  # negative means disabled
+
     if T_B is None:  # Self join!
         T_B = T_A
         ignore_trivial = True
@@ -619,6 +629,7 @@ def gpu_aamp(T_A, m, T_B=None, ignore_trivial=True, device_id=0, p=2.0, k=1):
                     start + 1,
                     device_ids[idx],
                     k,
+                    eu_thresh,
                 ),
             )
         else:
@@ -647,6 +658,7 @@ def gpu_aamp(T_A, m, T_B=None, ignore_trivial=True, device_id=0, p=2.0, k=1):
                 start + 1,
                 device_ids[idx],
                 k,
+                eu_thresh,
             )
 
     # Clean up process pool for multi-GPU request

@@ -491,6 +491,7 @@ def gpu_stump(
     k=1,
     T_A_subseq_isconstant=None,
     T_B_subseq_isconstant=None,
+    eu_thresh=None,
 ):
     """
     Compute the z-normalized matrix profile with one or more GPU devices
